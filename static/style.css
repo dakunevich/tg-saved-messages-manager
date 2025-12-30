@@ -1,0 +1,155 @@
+:root {
+    --bg-color: #121212;
+    --card-bg: #1e1e1e;
+    --text-primary: #ffffff;
+    --text-secondary: #b0b0b0;
+    --accent: #bb86fc;
+    --danger: #cf6679;
+    --border: #333;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    background-color: var(--bg-color);
+    padding: 20px 0;
+    z-index: 100;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+}
+
+h1 {
+    font-size: 24px;
+    margin: 0;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+#selection-count {
+    color: var(--text-secondary);
+}
+
+button {
+    background-color: var(--accent);
+    color: #000;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: opacity 0.2s;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#delete-btn {
+    background-color: var(--danger);
+    color: white;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.message-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    position: relative;
+    transition: transform 0.2s;
+    cursor: pointer;
+}
+
+.message-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+}
+
+.message-card.selected {
+    border-color: var(--accent);
+    background-color: #2a2a2a;
+}
+
+.checkbox-wrapper {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+}
+
+input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.content {
+    font-size: 14px;
+    line-height: 1.5;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.media-tag {
+    display: inline-block;
+    background-color: #333;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    margin-right: 6px;
+}
+
+.pagination {
+    text-align: center;
+    margin-top: 40px;
+    padding-bottom: 40px;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Message Images */
+.message-card img {
+    max-width: 100%;
+    max-height: 300px;
+    width: auto;
+    object-fit: contain;
+    border-radius: 4px;
+    margin-top: 8px;
+    display: block;
+}

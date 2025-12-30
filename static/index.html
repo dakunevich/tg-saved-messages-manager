@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saved Messages Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <h1>Saved Messages <span id="total-count" class="badge">0</span></h1>
+                <div class="controls">
+                    <label for="limit-select">Page size:</label>
+                    <select id="limit-select">
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+            <div class="actions">
+                <span id="selection-count">0 selected</span>
+                <button id="select-empty-btn">Select Empty</button>
+                <button id="delete-btn" disabled>Delete Selected</button>
+            </div>
+        </header>
+
+        <main id="message-grid" class="grid">
+            <!-- Messages will be injected here -->
+        </main>
+
+        <div id="loader" class="loader hidden">Loading...</div>
+        <div id="pagination" class="pagination">
+            <button id="load-more-btn">Load More</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
