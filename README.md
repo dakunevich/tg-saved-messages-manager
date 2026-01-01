@@ -13,8 +13,10 @@ A simple web application to manage your Telegram "Saved Messages". This tool all
 - **Activity Log**: Real-time console logging for server operations.
 - **Graceful Shutdown**: Safely stops the client and server on `CTRL+C`.
 
-## Prerequisites
+![Screenshot](static/screenshot.png)
 
+## Prerequisites
+go mod
 - [Go](https://go.dev/) 1.18 or higher.
 - A Telegram account.
 

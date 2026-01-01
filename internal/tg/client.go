@@ -212,7 +212,7 @@ type SavedMessage struct {
 }
 
 // GetSavedMessages fetches the history of 'Saved Messages' (InputPeerSelf).
-func (c *Client) GetSavedMessages(ctx context.Context, offsetID int, limit int) ([]SavedMessage, int, error) {
+func (c *Client) GetSavedMessages(ctx context.Context, offsetID int, limit int, addOffset int) ([]SavedMessage, int, error) {
 	if c.api == nil {
 		return nil, 0, errors.New("client not initialized")
 	}
@@ -225,9 +225,10 @@ func (c *Client) GetSavedMessages(ctx context.Context, offsetID int, limit int) 
 	}
 
 	history, err := c.api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
-		Peer:     &tg.InputPeerSelf{},
-		OffsetID: offsetID,
-		Limit:    limit,
+		Peer:      &tg.InputPeerSelf{},
+		OffsetID:  offsetID,
+		Limit:     limit,
+		AddOffset: addOffset,
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get history: %w", err)

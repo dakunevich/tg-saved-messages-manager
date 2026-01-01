@@ -1,9 +1,13 @@
 const state = {
     offsetID: 0,
+    addOffset: 0,
     isLoading: false,
     selected: new Set(),
     hasMore: true,
-    limit: 20
+    limit: 20,
+    total: 0,
+    userID: 0,
+    sortOrder: 'desc' // 'desc' (Newest first) or 'asc' (Oldest first)
 };
 
 const dom = {
@@ -14,35 +18,57 @@ const dom = {
     loader: document.getElementById('loader'),
     totalCount: document.getElementById('total-count'),
     limitSelect: document.getElementById('limit-select'),
-    selectEmptyBtn: document.getElementById('select-empty-btn')
+    selectEmptyBtn: document.getElementById('select-empty-btn'),
+    newestBtn: document.getElementById('newest-btn'),
+    oldestBtn: document.getElementById('oldest-btn')
 };
-
-console.log('[DEBUG] DOM Elements:', dom);
 
 function logAction(message) {
     console.log(`[UI LOG] ${message}`);
 }
 
-async function fetchMessages() {
-    if (state.isLoading || !state.hasMore) return;
+function linkify(text) {
+    if (!text) return text;
+    // Basic URL regex
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;">${url}</a>`);
+}
+
+async function fetchMessages(opts = {}) {
+    if (state.isLoading) return;
+
+    // If resetting (Newest/Oldest/LimitChange), clear grid and state
+    if (opts.reset) {
+        state.offsetID = opts.offsetID !== undefined ? opts.offsetID : 0;
+        state.addOffset = opts.addOffset || 0;
+        state.hasMore = true;
+        state.selected.clear();
+        dom.grid.innerHTML = '';
+        dom.loadMoreBtn.style.display = 'block';
+    }
+
+    if (!state.hasMore) return;
 
     state.isLoading = true;
     dom.loadMoreBtn.disabled = true;
     dom.loadMoreBtn.textContent = "Loading...";
 
+    const fetchLimit = opts.limit || state.limit;
+
     try {
-        logAction(`Fetching messages (limit: ${state.limit}, offset: ${state.offsetID})...`);
-        const res = await fetch(`/api/messages?limit=${state.limit}&offset_id=${state.offsetID}&_t=${Date.now()}`);
+        logAction(`Fetching messages (limit: ${fetchLimit}, offset: ${state.offsetID}, add_offset: ${state.addOffset})...`);
+        const res = await fetch(`/api/messages?limit=${fetchLimit}&offset_id=${state.offsetID}&add_offset=${state.addOffset}&_t=${Date.now()}`);
         if (!res.ok) throw new Error('Failed to fetch');
 
         const data = await res.json();
-        console.log('[DEBUG] Received data:', data);
+
+        // Update UserID if present
+        if (data.user_id) state.userID = data.user_id;
 
         // Update Total Count
         if (data.total !== undefined) {
+            state.total = data.total;
             if (dom.totalCount) dom.totalCount.textContent = data.total;
-        } else {
-            console.warn('[DEBUG] Total count missing in response');
         }
 
         if (!data.messages || data.messages.length === 0) {
@@ -52,12 +78,31 @@ async function fetchMessages() {
             return;
         }
 
-        renderMessages(data.messages);
-        logAction(`Loaded ${data.messages.length} messages.`);
+        let messages = data.messages;
+
+        // If Ascending (Oldest First), we reverse the batch
+        if (state.sortOrder === 'asc') {
+            messages.reverse();
+        }
+
+        renderMessages(messages);
+        logAction(`Loaded ${messages.length} messages.`);
 
         // Update offset for next page
-        const lastMsg = data.messages[data.messages.length - 1];
-        state.offsetID = lastMsg.id;
+        const lastMsg = messages[messages.length - 1];
+
+        if (state.sortOrder === 'asc') {
+            // In Ascending mode, lastMsg is the NEWEST of the batch.
+            // We want to load even newer messages.
+            // To get newer messages relative to lastMsg (going up in ID):
+            // We use offset_id = lastMsg.id, and add_offset = -limit.
+            state.offsetID = lastMsg.id;
+            state.addOffset = -(state.limit);
+        } else {
+            // Standard Descending mode (New -> Old)
+            state.offsetID = lastMsg.id;
+            state.addOffset = 0;
+        }
 
     } catch (err) {
         console.error(err);
@@ -66,6 +111,7 @@ async function fetchMessages() {
         state.isLoading = false;
         dom.loadMoreBtn.disabled = false;
         dom.loadMoreBtn.textContent = "Load More";
+        updateUI();
     }
 }
 
@@ -79,12 +125,13 @@ function renderMessages(messages) {
 
         let contentHtml = '';
         if (msg.message && msg.message.trim().length > 0) {
-            contentHtml = msg.message;
+            contentHtml = linkify(msg.message);
         } else {
             contentHtml = '<i>(No text content)</i>';
             card.classList.add('is-empty');
         }
 
+        // ... (Media Logic unchanged, but re-include for Replace) ...
         let mediaHtml = '';
         if (msg.attachments && msg.attachments.length > 0) {
             mediaHtml = '<div class="media-grid" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">';
@@ -97,9 +144,7 @@ function renderMessages(messages) {
             });
             mediaHtml += '</div>';
         } else if (msg.media_type) {
-            // Fallback for old/single style if any
             if (msg.media_type === "WebLink" && msg.web_preview) {
-                // Do not render "WebLink" tag if we have a preview
             } else {
                 if (msg.media_type === "Photo") {
                     mediaHtml = `<div style="margin-bottom: 8px;"><img src="/api/media?id=${msg.id}" loading="lazy" alt="Photo ${msg.id}"></div>`;
@@ -109,6 +154,7 @@ function renderMessages(messages) {
             }
         }
 
+        // ... (Preview Logic unchanged) ...
         let previewHtml = '';
         if (msg.web_preview) {
             previewHtml = `
@@ -121,17 +167,19 @@ function renderMessages(messages) {
             `;
         }
 
-        // We store the list of IDs in the checkbox value as JSON string for easy retrieval
-        // Or we use data attribute.
-        // Let's use data attribute on card for access.
         card.dataset.ids = JSON.stringify(msg.ids || [msg.id]);
+
+        // Deep Link for ID
+        // Direct message linking is not supported for Saved Messages.
+        // We link to the chat and copy ID on click.
+        const idLink = state.userID ? `tg://user?id=${state.userID}` : '#';
 
         card.innerHTML = `
             <div class="checkbox-wrapper">
-                <input type="checkbox" value="${msg.id}"> <!-- Value is just main ID for reference, invalid for logic now -->
+                <input type="checkbox" value="${msg.id}"> 
             </div>
             <div class="meta">
-                <span>ID: ${msg.id} ${msg.ids && msg.ids.length > 1 ? `(+${msg.ids.length - 1})` : ''}</span>
+                <span><a href="${idLink}" class="id-link" title="Open Telegram & Copy ID" style="color: inherit; text-decoration: none; border-bottom: 1px dashed var(--text-secondary);">ID: ${msg.id}</a> ${msg.ids && msg.ids.length > 1 ? `(+${msg.ids.length - 1})` : ''}</span>
                 <span>${dateStr}</span>
             </div>
             ${mediaHtml}
@@ -141,23 +189,80 @@ function renderMessages(messages) {
             ${previewHtml}
         `;
 
-        // Event Listeners
         const checkbox = card.querySelector('input');
-        // We pass the full list of IDs to toggleSelection
         const allIds = msg.ids || [msg.id];
+        const idAnchor = card.querySelector('.id-link');
 
         checkbox.addEventListener('change', (e) => toggleSelection(allIds, e.target.checked));
 
+        // Click handler logic needs update to ignore ID link click
         card.addEventListener('click', (e) => {
-            if (e.target !== checkbox && e.target.tagName !== 'IMG') {
+            // If click is on checkbox, image, OR link (anchor tag), ignore selection toggle
+            if (e.target !== checkbox && e.target.tagName !== 'IMG' && e.target.tagName !== 'A' && !e.target.closest('a')) {
                 checkbox.checked = !checkbox.checked;
                 toggleSelection(allIds, checkbox.checked);
             }
         });
 
+        // Smart Link: Copy ID + Open Telegram
+        if (idAnchor) {
+            idAnchor.addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                // Copy ID to clipboard
+                navigator.clipboard.writeText(msg.id.toString()).then(() => {
+                    // We could show a toast, but for now simple log or let it be.
+                    // A blocking alert is annoying but ensures user knows.
+                    // Let's use a temporary tooltip change or just rely on the user knowing.
+                    // The user asked "opens telegram instead...".
+                    // If we give them the ID, they can search.
+                    // Let's alert briefly or just let it happen.
+                    logAction("ID " + msg.id + " copied to clipboard.");
+                });
+            });
+        }
+
         dom.grid.appendChild(card);
     });
 }
+// ... (Logic for toggle/delete unchanged) ...
+
+function handleNewest() {
+    state.sortOrder = 'desc';
+    fetchMessages({ reset: true, addOffset: 0, offsetID: 0 });
+}
+
+async function handleOldest() {
+    state.sortOrder = 'asc';
+
+    if (state.total === 0) {
+        // Safe-guard: If total is unknown, fetch newest first (limit 1) to populate it
+        await fetchMessages({ limit: 1, reset: false });
+        // Note: reset: false to avoid clearing grid unnecessarily, 
+        // but we are about to jump anyway.
+    }
+
+    const total = state.total;
+    const limit = state.limit;
+
+    // Calculate offset to reach end.
+    // Use Math.max to avoid negative offset
+    const addOffset = Math.max(0, total - limit);
+
+    // Explicitly set offsetID to 0 (Start of list) + addOffset (Skip to end)
+    await fetchMessages({ reset: true, addOffset: addOffset, offsetID: 0 });
+}
+
+dom.loadMoreBtn.addEventListener('click', () => fetchMessages());
+dom.newestBtn.addEventListener('click', handleNewest);
+dom.oldestBtn.addEventListener('click', handleOldest);
+// ... (Existing listeners) ...
+dom.deleteBtn.addEventListener('click', deleteSelected);
+dom.selectEmptyBtn.addEventListener('click', selectEmpty);
+dom.limitSelect.addEventListener('change', handleLimitChange);
+
+// Initial Load
+fetchMessages();
 
 // Accepts array of IDs
 function toggleSelection(ids, isSelected) {
@@ -199,6 +304,7 @@ function updateUI() {
 }
 
 async function deleteSelected() {
+    if (!state.selected.size) return;
     if (!confirm(`Delete ${state.selected.size} messages?`)) return;
 
     const ids = Array.from(state.selected);
@@ -214,27 +320,27 @@ async function deleteSelected() {
         if (!res.ok) throw new Error('Delete failed');
 
         // Remove from UI
-        // We iterate state.selected or ids.
-        // But cards have many IDs. If we delete 1 ID from a group, what happens?
-        // Usually we delete all.
-        // We need to remove the card corresponding to the standard ID.
-        // We can just iterate all cards and see if their IDs are in the deleted set.
-
         document.querySelectorAll('.message-card').forEach(card => {
-            const cardIds = JSON.parse(card.dataset.ids || "[]");
-            // If any of cardIds is deleted, remove card?
-            // Or if ALL are deleted?
-            // Since we group select, we likely delete all.
-            // Let's remove card if its main ID is deleted.
             const mainId = parseInt(card.dataset.id);
+            // We only need to match the Main ID of the card to one of the deleted IDs
             if (ids.includes(mainId)) {
                 card.remove();
             }
         });
 
+        // Update State
+        const deletedCount = ids.length; // Approximate, assuming all successful
+        state.total = Math.max(0, state.total - deletedCount);
+        if (dom.totalCount) dom.totalCount.textContent = state.total;
+
         state.selected.clear();
         updateUI();
-        logAction(`Successfully deleted ${ids.length} messages.`);
+        logAction(`Successfully deleted ${deletedCount} messages.`);
+
+        // If grid is empty after delete, maybe try to fetch more?
+        if (dom.grid.children.length === 0 && state.hasMore) {
+            fetchMessages();
+        }
 
     } catch (err) {
         console.error(err);
@@ -280,10 +386,7 @@ function handleLimitChange() {
     fetchMessages();
 }
 
-dom.loadMoreBtn.addEventListener('click', fetchMessages);
-dom.deleteBtn.addEventListener('click', deleteSelected);
-dom.selectEmptyBtn.addEventListener('click', selectEmpty);
-dom.limitSelect.addEventListener('change', handleLimitChange);
+
 
 // Initial Load
 fetchMessages();

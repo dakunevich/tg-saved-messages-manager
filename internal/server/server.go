@@ -99,6 +99,7 @@ func (s *Server) handleGetMessages(w http.ResponseWriter, r *http.Request) {
 
 	offsetIDStr := r.URL.Query().Get("offset_id")
 	limitStr := r.URL.Query().Get("limit")
+	addOffsetStr := r.URL.Query().Get("add_offset")
 
 	offsetID := 0
 	if offsetIDStr != "" {
@@ -120,18 +121,34 @@ func (s *Server) handleGetMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Printf("Activity: Fetching messages (Limit: %d, Offset: %d)", limit, offsetID)
+	addOffset := 0
+	if addOffsetStr != "" {
+		var err error
+		addOffset, err = strconv.Atoi(addOffsetStr)
+		if err != nil {
+			http.Error(w, "Invalid add_offset", http.StatusBadRequest)
+			return
+		}
+	}
 
-	messages, total, err := s.tgClient.GetSavedMessages(r.Context(), offsetID, limit)
+	log.Printf("Activity: Fetching messages (Limit: %d, Offset: %d, AddOffset: %d)", limit, offsetID, addOffset)
+
+	messages, total, err := s.tgClient.GetSavedMessages(r.Context(), offsetID, limit, addOffset)
 	if err != nil {
 		log.Printf("Error fetching messages: %v", err)
 		http.Error(w, "Failed to fetch messages", http.StatusInternalServerError)
 		return
 	}
 
+	var userID int64
+	if s.tgClient.User != nil {
+		userID = s.tgClient.User.ID
+	}
+
 	response := map[string]interface{}{
 		"messages": messages,
 		"total":    total,
+		"user_id":  userID,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
